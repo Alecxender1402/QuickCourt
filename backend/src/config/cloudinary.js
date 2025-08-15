@@ -4,9 +4,9 @@ import multer from 'multer';
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dscyu7xhk', // Updated with a more likely cloud name format
-  api_key: process.env.CLOUDINARY_API_KEY || '333792319292266',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'slT6IfXyHuaS0vmJyCaQYc6c0bc',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME
+  api_key: process.env.CLOUDINARY_API_KEY 
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 // Test Cloudinary connection
