@@ -421,11 +421,19 @@ const VenueDetails = () => {
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700"
-                            onClick={() =>
+                            onClick={() => {
+                              if (!user) {
+                                toast({
+                                  title: "Login Required",
+                                  description: "You must login first for booking venue",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
                               navigate(
                                 `/booking/court?venueId=${venueId}&courtId=${court.id}`
-                              )
-                            }
+                              );
+                            }}
                           >
                             Book Court
                           </Button>

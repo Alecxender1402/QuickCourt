@@ -52,6 +52,10 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401) {
       console.warn('🔒 Authentication failed - clearing tokens');
+      
+      // Check if this is a logout request
+      const isLogoutRequest = error.config?.url?.includes('/auth/logout');
+      
       // Clear auth data and trigger logout
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -59,9 +63,9 @@ api.interceptors.response.use(
       // Dispatch a custom event to notify AuthContext
       window.dispatchEvent(new CustomEvent('auth:logout'));
       
-      // Only redirect if not already on login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = "/login";
+      // Only redirect if not logout request and not already on login page
+      if (!isLogoutRequest && window.location.pathname !== '/') {
+        window.location.href = "/";
       }
     }
     return Promise.reject(error);
