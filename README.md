@@ -309,7 +309,7 @@ This project is licensed under the ISC License. See the LICENSE file for details
 
 ## 👥 Authors
 
-- **Abhi Bhingradiya** - *Initial work* - [@Alecxender1402](https://github.com/Alecxender1402)
+- **Abhi Bhingradiya** - *Initial work* - [@F1Square](https://github.com/F1Square)
 
 ## 🙏 Acknowledgments
 
