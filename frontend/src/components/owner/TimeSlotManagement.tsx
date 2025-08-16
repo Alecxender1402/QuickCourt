@@ -1,21 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Clock,
-  Calendar,
-  Plus,
-  Settings,
-  Trash2,
-  ToggleLeft,
-  ToggleRight,
-} from "lucide-react";
+import { Settings } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
 import {
   Select,
   SelectContent,
@@ -25,7 +10,6 @@ import {
 } from "../ui/select";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Badge } from "../ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,39 +17,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../ui/alert-dialog";
 import { useToast } from "../../hooks/use-toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { Court } from "../../lib/types";
-import timeSlotService, {
-  TimeSlot,
-  CreateTimeSlotRequest,
-  GenerateDefaultSlotsRequest,
-} from "../../services/timeSlotService";
-
-const DAYS_OF_WEEK = [
-  { value: 0, label: "Sunday", short: "Sun" },
-  { value: 1, label: "Monday", short: "Mon" },
-  { value: 2, label: "Tuesday", short: "Tue" },
-  { value: 3, label: "Wednesday", short: "Wed" },
-  { value: 4, label: "Thursday", short: "Thu" },
-  { value: 5, label: "Friday", short: "Fri" },
-  { value: 6, label: "Saturday", short: "Sat" },
-];
+import timeSlotService from "../../services/timeSlotService";
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? "00" : "30";
-  const time = `${hour.toString().padStart(2, "0")}:${minute}`;
+  const minute = i % 2 === 0 ? 0 : 30;
+  const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
   const today = new Date();
   const timeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute, 0);
   const display = timeDate.toLocaleTimeString([], {
@@ -101,7 +61,7 @@ export default function TimeSlotManagement({
       console.error("❌ User is not authenticated!");
       toast({
         title: "Authentication Error",
-        description: "You must be logged in to manage time slots",
+        description: "You must be logged in to manage operating hours",
         variant: "destructive",
       });
       return;
@@ -113,7 +73,7 @@ export default function TimeSlotManagement({
       console.log("  - Current role:", user?.role);
       toast({
         title: "Permission Error", 
-        description: "You must be a facility owner or admin to manage time slots",
+        description: "You must be a facility owner or admin to manage operating hours",
         variant: "destructive",
       });
       return;
@@ -123,56 +83,35 @@ export default function TimeSlotManagement({
   }, [user, token, isAuthenticated, toast]);
 
   const [loading, setLoading] = useState(false);
-  const [weeklySchedule, setWeeklySchedule] = useState<{
-    [dayOfWeek: number]: TimeSlot[];
-  }>({});
-  const [selectedDay, setSelectedDay] = useState<number>(1); // Monday by default
-  const [showAddSlotDialog, setShowAddSlotDialog] = useState(false);
-  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [slotToDelete, setSlotToDelete] = useState<TimeSlot | null>(null);
+  const [operatingHoursInfo, setOperatingHoursInfo] = useState<any>(null);
+  const [showOperatingHoursDialog, setShowOperatingHoursDialog] = useState(false);
 
-  // Add slot form state
-  const [newSlot, setNewSlot] = useState<CreateTimeSlotRequest>({
-    dayOfWeek: 1,
+  // Operating hours form state (simplified)
+  const [operatingHours, setOperatingHours] = useState({
+    startDate: new Date().toISOString().split('T')[0], // Today's date
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
     startTime: "09:00",
-    endTime: "10:00",
-    isAvailable: true,
+    endTime: "21:00",
   });
 
-  // Generate slots form state
-  const [generateConfig, setGenerateConfig] =
-    useState<GenerateDefaultSlotsRequest>({
-      operatingHours: {
-        start: "09:00",
-        end: "21:00",
-      },
-      daysOfWeek: [1, 2, 3, 4, 5], // Weekdays by default
-    });
-
-  const fetchWeeklySchedule = useCallback(async () => {
+  const fetchOperatingHours = useCallback(async () => {
     try {
       setLoading(true);
-      const schedule = await timeSlotService.getWeeklySchedule(
-        court.venueId,
-        court.id
-      );
-      setWeeklySchedule(schedule);
+      const operatingHours = await timeSlotService.getCourtOperatingHours(court.venueId, court.id);
+      setOperatingHoursInfo(operatingHours);
       
-      // Check if schedule is empty and show helpful message
-      const hasAnySlots = Object.values(schedule).some(daySlots => daySlots.length > 0);
-      if (!hasAnySlots) {
+      if (!operatingHours) {
         toast({
-          title: "No Time Slots Found",
-          description: "No time slots have been generated for this court yet. Use 'Generate Default Slots' to create them.",
+          title: "No Operating Hours Found",
+          description: "No operating hours have been set for this court yet. Click 'Set Operating Hours' to configure them.",
           variant: "default",
         });
       }
     } catch (error) {
-      console.error("Failed to fetch time slots:", error);
+      console.error("Failed to fetch operating hours:", error);
       toast({
         title: "Error",
-        description: "Failed to load time slots",
+        description: "Failed to load operating hours",
         variant: "destructive",
       });
     } finally {
@@ -181,124 +120,72 @@ export default function TimeSlotManagement({
   }, [court.id, court.venueId, toast]);
 
   useEffect(() => {
-    fetchWeeklySchedule();
-  }, [fetchWeeklySchedule]);
+    fetchOperatingHours();
+  }, [fetchOperatingHours]);
 
-  const handleAddSlot = async () => {
-    try {
-      setLoading(true);
-      await timeSlotService.createTimeSlots(court.venueId, court.id, {
-        timeSlots: [newSlot],
-      });
-
-      toast({
-        title: "Success",
-        description: "Time slot created successfully",
-      });
-
-      setShowAddSlotDialog(false);
-      setNewSlot({
-        dayOfWeek: selectedDay,
-        startTime: "09:00",
-        endTime: "10:00",
-        isAvailable: true,
-      });
-
-      await fetchWeeklySchedule();
-    } catch (error) {
-      console.error("Failed to create time slot:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create time slot",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGenerateSlots = async () => {
+  const handleSetOperatingHours = async () => {
     try {
       setLoading(true);
       
-      console.log('🚀 Generating time slots with config:', {
+      console.log('🚀 Setting operating hours with config:', {
         venueId: court.venueId,
         courtId: court.id,
-        generateConfig
+        operatingHours
       });
       
-      await timeSlotService.generateDefaultTimeSlots(
-        court.venueId,
-        court.id,
-        generateConfig
-      );
+      // Validate operating hours
+      if (!operatingHours.startDate || !operatingHours.endDate) {
+        toast({
+          title: "Error",
+          description: "Please select start and end dates",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (new Date(operatingHours.endDate) < new Date(operatingHours.startDate)) {
+        toast({
+          title: "Error",
+          description: "End date must be after start date",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (operatingHours.startTime >= operatingHours.endTime) {
+        toast({
+          title: "Error",
+          description: "End time must be after start time",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Save operating hours to the court (all days of the week by default)
+      await timeSlotService.setCourtOperatingHours(court.venueId, court.id, {
+        startDate: operatingHours.startDate,
+        endDate: operatingHours.endDate,
+        startTime: operatingHours.startTime,
+        endTime: operatingHours.endTime,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // All days of the week
+      });
 
       toast({
         title: "Success",
-        description: "Time slots generated successfully",
+        description: "Operating hours set successfully",
       });
 
-      setShowGenerateDialog(false);
-      await fetchWeeklySchedule();
+      setShowOperatingHoursDialog(false);
+      await fetchOperatingHours();
     } catch (error) {
-      console.error("Failed to generate time slots:", error);
+      console.error("Failed to set operating hours:", error);
       toast({
         title: "Error",
-        description: `Failed to generate time slots: ${error.message || 'Unknown error'}`,
+        description: `Failed to set operating hours: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleToggleSlot = async (slot: TimeSlot) => {
-    try {
-      await timeSlotService.updateTimeSlot(court.venueId, court.id, slot.id, {
-        isAvailable: !slot.isAvailable,
-      });
-
-      toast({
-        title: "Success",
-        description: `Time slot ${slot.isAvailable ? "disabled" : "enabled"}`,
-      });
-
-      await fetchWeeklySchedule();
-    } catch (error) {
-      console.error("Failed to toggle time slot:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update time slot",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteSlot = async () => {
-    if (!slotToDelete) return;
-
-    try {
-      await timeSlotService.deleteTimeSlot(
-        court.venueId,
-        court.id,
-        slotToDelete.id
-      );
-
-      toast({
-        title: "Success",
-        description: "Time slot deleted successfully",
-      });
-
-      setShowDeleteDialog(false);
-      setSlotToDelete(null);
-      await fetchWeeklySchedule();
-    } catch (error) {
-      console.error("Failed to delete time slot:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete time slot",
-        variant: "destructive",
-      });
     }
   };
 
@@ -313,407 +200,101 @@ export default function TimeSlotManagement({
     });
   };
 
-  const getDaySlots = (dayOfWeek: number) => {
-    return weeklySchedule[dayOfWeek] || [];
-  };
-
-  const getBookedDaySlots = (dayOfWeek: number) => {
-    return (weeklySchedule[dayOfWeek] || []).filter(slot => !slot.isAvailable);
-  };
-
-  const getTotalSlots = () => {
-    return Object.values(weeklySchedule).flat().length;
-  };
-
-  const getAvailableSlots = () => {
-    return Object.values(weeklySchedule)
-      .flat()
-      .filter((slot) => slot.isAvailable).length;
-  };
-
-  const getBookedSlots = () => {
-    return Object.values(weeklySchedule)
-      .flat()
-      .filter((slot) => !slot.isAvailable).length; // Booked slots are marked as unavailable
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">
-            Time Slot Management
+            Operating Hours Management
           </h2>
           <p className="text-gray-600 mt-1">
-            Manage availability schedule for {court.name}
+            Set operating hours for {court.name}
           </p>
+          {operatingHoursInfo && (
+            <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-green-800 mb-2">Current Operating Hours</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-green-700">
+                <div>
+                  <span className="font-medium">Date Range:</span><br />
+                  {new Date(operatingHoursInfo.startDate).toLocaleDateString()} to {new Date(operatingHoursInfo.endDate).toLocaleDateString()}
+                </div>
+                <div>
+                  <span className="font-medium">Daily Hours:</span><br />
+                  {formatTime(operatingHoursInfo.startTime)} - {formatTime(operatingHoursInfo.endTime)}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <Button onClick={onClose} variant="outline">
           Close
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Slots
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">
-              {getTotalSlots()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Booked Slots
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {getBookedSlots()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Available
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {getAvailableSlots()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Unavailable
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {getTotalSlots() - getAvailableSlots()}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Days Configured
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {
-                Object.values(weeklySchedule).filter(
-                  (slots) => slots.length > 0
-                ).length
-              }
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-3">
-        <Button
-          onClick={() => setShowAddSlotDialog(true)}
+      {/* Action Button */}
+      <div className="flex gap-4">
+        <Button 
+          onClick={() => setShowOperatingHoursDialog(true)}
           className="bg-blue-600 hover:bg-blue-700"
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Time Slot
-        </Button>
-        <Button onClick={() => setShowGenerateDialog(true)} variant="outline">
           <Settings className="w-4 h-4 mr-2" />
-          Generate Slots
+          Set Operating Hours
         </Button>
       </div>
 
-      {/* Day Filter */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Day Filter</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={selectedDay === -1 ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedDay(-1)}
-            >
-              All Days
-            </Button>
-            {DAYS_OF_WEEK.map((day) => (
-              <Button
-                key={day.value}
-                variant={selectedDay === day.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedDay(day.value)}
-              >
-                {day.short}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Time Slots Display */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {selectedDay === -1
-              ? "All Time Slots"
-              : `${DAYS_OF_WEEK[selectedDay]?.label} Time Slots`}
-          </CardTitle>
-          <CardDescription>
-            Manage availability for individual time slots
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {selectedDay === -1 ? (
-                // Show all days
-                DAYS_OF_WEEK.map((day) => {
-                  const daySlots = getBookedDaySlots(day.value); // Only show booked slots
-                  if (daySlots.length === 0) return null;
-
-                  return (
-                    <div key={day.value} className="space-y-2">
-                      <h4 className="font-medium text-gray-900">{day.label} - Booked Slots</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {daySlots.map((slot) => (
-                          <div
-                            key={slot.id}
-                            className="p-3 border rounded-lg flex items-center justify-between bg-blue-50 border-blue-200"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4" />
-                              <span className="font-medium">
-                                {formatTime(slot.startTime)} -{" "}
-                                {formatTime(slot.endTime)}
-                              </span>
-                              <Badge variant="default">
-                                Booked
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleToggleSlot(slot)}
-                              >
-                                <ToggleLeft className="w-4 h-4 text-blue-600" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setSlotToDelete(slot);
-                                  setShowDeleteDialog(true);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                // Show selected day only
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {getDaySlots(selectedDay).length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-gray-500">
-                      <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                      <p>No time slots configured for this day</p>
-                      <Button
-                        onClick={() => setShowAddSlotDialog(true)}
-                        variant="outline"
-                        className="mt-4"
-                      >
-                        Add Time Slot
-                      </Button>
-                    </div>
-                  ) : (
-                    getBookedDaySlots(selectedDay).length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        No booked slots for this day
-                      </div>
-                    ) : (
-                    getBookedDaySlots(selectedDay).map((slot) => (
-                      <div
-                        key={slot.id}
-                        className="p-4 border rounded-lg bg-blue-50 border-blue-200"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-4 h-4" />
-                          <span className="font-medium">
-                            {formatTime(slot.startTime)} -{" "}
-                            {formatTime(slot.endTime)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Badge variant="default">
-                            Booked
-                          </Badge>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleToggleSlot(slot)}
-                            >
-                              {slot.isAvailable ? (
-                                <ToggleRight className="w-4 h-4 text-green-600" />
-                              ) : (
-                                <ToggleLeft className="w-4 h-4 text-red-600" />
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setSlotToDelete(slot);
-                                setShowDeleteDialog(true);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Add Time Slot Dialog */}
-      <Dialog open={showAddSlotDialog} onOpenChange={setShowAddSlotDialog}>
+      {/* Set Operating Hours Dialog */}
+      <Dialog open={showOperatingHoursDialog} onOpenChange={setShowOperatingHoursDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Time Slot</DialogTitle>
+            <DialogTitle>Set Operating Hours</DialogTitle>
             <DialogDescription>
-              Create a new time slot for {court.name}
+              Set the date range and daily operating hours for this court
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="dayOfWeek">Day of Week</Label>
-              <Select
-                value={newSlot.dayOfWeek.toString()}
-                onValueChange={(value) =>
-                  setNewSlot({ ...newSlot, dayOfWeek: parseInt(value) })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select day" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OF_WEEK.map((day) => (
-                    <SelectItem key={day.value} value={day.value.toString()}>
-                      {day.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Date Range */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="startTime">Start Time</Label>
-                <Select
-                  value={newSlot.startTime}
-                  onValueChange={(value) =>
-                    setNewSlot({ ...newSlot, startTime: value })
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={operatingHours.startDate}
+                  onChange={(e) =>
+                    setOperatingHours({
+                      ...operatingHours,
+                      startDate: e.target.value,
+                    })
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Start time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map((time) => (
-                      <SelectItem key={time.value} value={time.value}>
-                        {time.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endTime">End Time</Label>
-                <Select
-                  value={newSlot.endTime}
-                  onValueChange={(value) =>
-                    setNewSlot({ ...newSlot, endTime: value })
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={operatingHours.endDate}
+                  onChange={(e) =>
+                    setOperatingHours({
+                      ...operatingHours,
+                      endDate: e.target.value,
+                    })
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="End time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map((time) => (
-                      <SelectItem key={time.value} value={time.value}>
-                        {time.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowAddSlotDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleAddSlot} disabled={loading}>
-              {loading ? "Creating..." : "Create Slot"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Generate Slots Dialog */}
-      <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Generate Default Time Slots</DialogTitle>
-            <DialogDescription>
-              Automatically create time slots based on operating hours
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+            
+            {/* Daily Time Range */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="startHour">Opening Time</Label>
+                <Label htmlFor="startTime">Opening Time</Label>
                 <Select
-                  value={generateConfig.operatingHours?.start}
+                  value={operatingHours.startTime}
                   onValueChange={(value) =>
-                    setGenerateConfig({
-                      ...generateConfig,
-                      operatingHours: {
-                        ...generateConfig.operatingHours!,
-                        start: value,
-                      },
+                    setOperatingHours({
+                      ...operatingHours,
+                      startTime: value,
                     })
                   }
                 >
@@ -730,16 +311,13 @@ export default function TimeSlotManagement({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endHour">Closing Time</Label>
+                <Label htmlFor="endTime">Closing Time</Label>
                 <Select
-                  value={generateConfig.operatingHours?.end}
+                  value={operatingHours.endTime}
                   onValueChange={(value) =>
-                    setGenerateConfig({
-                      ...generateConfig,
-                      operatingHours: {
-                        ...generateConfig.operatingHours!,
-                        end: value,
-                      },
+                    setOperatingHours({
+                      ...operatingHours,
+                      endTime: value,
                     })
                   }
                 >
@@ -756,76 +334,20 @@ export default function TimeSlotManagement({
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Days to Generate</Label>
-              <div className="flex gap-2 flex-wrap">
-                {DAYS_OF_WEEK.map((day) => (
-                  <Button
-                    key={day.value}
-                    variant={
-                      generateConfig.daysOfWeek?.includes(day.value)
-                        ? "default"
-                        : "outline"
-                    }
-                    size="sm"
-                    onClick={() => {
-                      const currentDays = generateConfig.daysOfWeek || [];
-                      if (currentDays.includes(day.value)) {
-                        setGenerateConfig({
-                          ...generateConfig,
-                          daysOfWeek: currentDays.filter(
-                            (d) => d !== day.value
-                          ),
-                        });
-                      } else {
-                        setGenerateConfig({
-                          ...generateConfig,
-                          daysOfWeek: [...currentDays, day.value],
-                        });
-                      }
-                    }}
-                  >
-                    {day.short}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button
               variant="outline"
-              onClick={() => setShowGenerateDialog(false)}
+              onClick={() => setShowOperatingHoursDialog(false)}
             >
               Cancel
             </Button>
-            <Button onClick={handleGenerateSlots} disabled={loading}>
-              {loading ? "Generating..." : "Generate Slots"}
+            <Button onClick={handleSetOperatingHours} disabled={loading}>
+              {loading ? "Setting..." : "Set Operating Hours"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Time Slot</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this time slot? This action cannot
-              be undone and may affect existing bookings.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteSlot}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Delete Slot
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

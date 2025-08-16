@@ -1076,15 +1076,7 @@ const Index = () => {
                                 size="sm"
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  if (!user) {
-                                    toast({
-                                      title: "Login Required",
-                                      description: "You must login first for booking venue",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-                                  navigate(`/booking/${venue.id}`);
+                                  navigate(`/venue/${venue.id}`);
                                 }}
                                 className="text-xs"
                               >

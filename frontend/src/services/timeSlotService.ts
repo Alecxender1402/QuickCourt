@@ -32,6 +32,14 @@ export interface GenerateDefaultSlotsRequest {
   daysOfWeek?: number[]; // days to generate for, default all days
 }
 
+export interface SetOperatingHoursRequest {
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  daysOfWeek: number[];
+}
+
 export interface BlockedSlot {
   id: number;
   dayOfWeek: number;
@@ -164,6 +172,47 @@ class TimeSlotService {
       throw new Error(response.data.message || "Failed to generate time slots");
     } catch (error) {
       throw handleApiError(error);
+    }
+  }
+
+  // Set court operating hours
+  async setCourtOperatingHours(
+    venueId: number,
+    courtId: number,
+    config: SetOperatingHoursRequest
+  ): Promise<void> {
+    try {
+      const response = await api.post<ApiResponse<void>>(
+        `/time-slots/venues/${venueId}/courts/${courtId}/operating-hours`,
+        config
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || "Failed to set operating hours");
+      }
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  // Get court operating hours
+  async getCourtOperatingHours(
+    venueId: number,
+    courtId: number
+  ): Promise<SetOperatingHoursRequest | null> {
+    try {
+      const response = await api.get<ApiResponse<SetOperatingHoursRequest>>(
+        `/time-slots/venues/${venueId}/courts/${courtId}/operating-hours`
+      );
+
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Failed to get operating hours:", error);
+      return null;
     }
   }
 

@@ -29,6 +29,13 @@ interface ExistingBooking {
   bookedBy: string;
 }
 
+interface OperatingHours {
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+}
+
 interface FlexibleBookingFormProps {
   venue: Venue;
 }
@@ -40,6 +47,7 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
+  const [operatingHours, setOperatingHours] = useState<OperatingHours | null>(null);
   const [availability, setAvailability] = useState<any>(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +58,7 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
   useEffect(() => {
     if (bookingDate && selectedCourt) {
       fetchExistingBookings();
+      fetchOperatingHours();
     }
   }, [bookingDate, selectedCourt]);
 
@@ -58,6 +67,22 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
       checkAvailability();
     }
   }, [selectedCourt, bookingDate, startTime, endTime]);
+
+  const fetchOperatingHours = async () => {
+    if (!selectedCourt) return;
+    
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/flexible-booking/court/${selectedCourt.id}/operating-hours`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setOperatingHours(data.data || null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch operating hours:', error);
+    }
+  };
 
   const fetchExistingBookings = async () => {
     try {
@@ -73,8 +98,57 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
     }
   };
 
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const today = new Date();
+    const timeDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, 0);
+    return timeDate.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const isWithinOperatingHours = (startTime: string, endTime: string) => {
+    if (!operatingHours) return true; // Allow booking if no operating hours set
+    
+    const bookingStart = startTime;
+    const bookingEnd = endTime;
+    const operatingStart = operatingHours.startTime;
+    const operatingEnd = operatingHours.endTime;
+    
+    return bookingStart >= operatingStart && bookingEnd <= operatingEnd;
+  };
+
+  const isDateWithinOperatingRange = (date: string) => {
+    if (!operatingHours) return true; // Allow booking if no operating hours set
+    
+    const bookingDate = new Date(date);
+    const startDate = new Date(operatingHours.startDate);
+    const endDate = new Date(operatingHours.endDate);
+    
+    return bookingDate >= startDate && bookingDate <= endDate;
+  };
+
   const checkAvailability = async () => {
     if (!selectedCourt || !bookingDate || !startTime || !endTime) return;
+
+    // Check operating hours first
+    if (!isDateWithinOperatingRange(bookingDate)) {
+      setAvailability({ 
+        isAvailable: false, 
+        error: `This court is not available on the selected date. Operating period: ${formatTime(operatingHours?.startTime || '')} - ${formatTime(operatingHours?.endTime || '')}` 
+      });
+      return;
+    }
+
+    if (!isWithinOperatingHours(startTime, endTime)) {
+      setAvailability({ 
+        isAvailable: false, 
+        error: `Selected time is outside operating hours (${formatTime(operatingHours?.startTime || '')} - ${formatTime(operatingHours?.endTime || '')})` 
+      });
+      return;
+    }
 
     setChecking(true);
     try {
@@ -278,6 +352,35 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
               ))}
             </div>
           </div>
+
+          {/* Operating Hours Display */}
+          {selectedCourt && operatingHours && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-800 mb-2">
+                <Clock className="h-4 w-4 inline mr-1" />
+                Operating Hours for {selectedCourt.name}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-blue-700">
+                <div>
+                  <span className="font-medium">Available Dates:</span><br />
+                  {new Date(operatingHours.startDate).toLocaleDateString()} to {new Date(operatingHours.endDate).toLocaleDateString()}
+                </div>
+                <div>
+                  <span className="font-medium">Daily Hours:</span><br />
+                  {formatTime(operatingHours.startTime)} - {formatTime(operatingHours.endTime)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedCourt && !operatingHours && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <AlertCircle className="h-4 w-4 inline mr-1" />
+                No operating hours set for this court. Please contact the facility owner.
+              </p>
+            </div>
+          )}
 
           {/* Date Selection */}
           <div className="space-y-2">

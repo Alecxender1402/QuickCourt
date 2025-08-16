@@ -21,10 +21,6 @@ interface CourtData {
   name: string;
   sportType: string;
   pricePerHour: number;
-  operatingHours: {
-    start: string;
-    end: string;
-  };
   maxPlayers: number;
 }
 
@@ -97,10 +93,6 @@ const CreateVenue = () => {
       name: `Court ${formData.courts.length + 1}`,
       sportType: '',
       pricePerHour: 0,
-      operatingHours: {
-        start: '06:00',
-        end: '22:00'
-      },
       maxPlayers: 2
     };
     setFormData(prev => ({
@@ -221,7 +213,6 @@ const CreateVenue = () => {
         name: court.name,
         sportType: court.sportType,
         pricePerHour: court.pricePerHour,
-        operatingHours: court.operatingHours,
         maxPlayers: court.maxPlayers
       }))));
 
@@ -489,28 +480,6 @@ const CreateVenue = () => {
                           onChange={(e) => updateCourt(court.id, { maxPlayers: Number(e.target.value) })}
                           min="1"
                           max="22"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Opening Time</Label>
-                        <Input
-                          type="time"
-                          value={court.operatingHours.start}
-                          onChange={(e) => updateCourt(court.id, { 
-                            operatingHours: { ...court.operatingHours, start: e.target.value }
-                          })}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Closing Time</Label>
-                        <Input
-                          type="time"
-                          value={court.operatingHours.end}
-                          onChange={(e) => updateCourt(court.id, { 
-                            operatingHours: { ...court.operatingHours, end: e.target.value }
-                          })}
                         />
                       </div>
                     </div>
