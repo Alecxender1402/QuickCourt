@@ -7,6 +7,8 @@ import {
   getVenueWorkingHours,
   generateVenueTimeSlots,
   getCourtTimeSlots,
+  setCourtOperatingHours,
+  getCourtOperatingHours,
 } from '../controllers/timeSlotController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -70,6 +72,34 @@ router.post(
     body('days').optional().isInt({ min: 1, max: 365 }).withMessage('Days must be between 1 and 365')
   ],
   generateVenueTimeSlots
+);
+
+// Set court operating hours
+router.post(
+  '/venues/:venueId/courts/:courtId/operating-hours',
+  authenticate,
+  [
+    param('venueId').isInt(),
+    param('courtId').isInt(),
+    body('startDate').isISO8601().withMessage('Start date must be valid'),
+    body('endDate').isISO8601().withMessage('End date must be valid'),
+    body('startTime').matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Start time must be in HH:MM format'),
+    body('endTime').matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('End time must be in HH:MM format'),
+    body('daysOfWeek').isArray().withMessage('Days of week must be an array'),
+    body('daysOfWeek.*').isInt({ min: 0, max: 6 }).withMessage('Day of week must be 0-6')
+  ],
+  setCourtOperatingHours
+);
+
+// Get court operating hours
+router.get(
+  '/venues/:venueId/courts/:courtId/operating-hours',
+  authenticate,
+  [
+    param('venueId').isInt(),
+    param('courtId').isInt()
+  ],
+  getCourtOperatingHours
 );
 
 // Get court time slots for management

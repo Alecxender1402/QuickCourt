@@ -215,6 +215,58 @@ export const createBooking = async (req, res) => {
       });
     }
 
+    // Check operating hours if they are set
+    if (court.operatingHours) {
+      const operatingHours = court.operatingHours;
+      const bookingDayOfWeek = bookingDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      
+      console.log('🕐 Operating Hours Check:', {
+        courtId: court.id,
+        bookingDate,
+        bookingDayOfWeek,
+        operatingHoursDays: operatingHours.daysOfWeek,
+        isIncluded: operatingHours.daysOfWeek ? operatingHours.daysOfWeek.includes(bookingDayOfWeek) : 'No days set'
+      });
+      
+      // Check if the venue is open on this day
+      if (!operatingHours.daysOfWeek || !operatingHours.daysOfWeek.includes(bookingDayOfWeek)) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        return res.status(400).json({
+          success: false,
+          message: `The venue is closed on ${dayNames[bookingDayOfWeek]}`,
+        });
+      }
+
+      // Check if booking date is within the operating date range
+      const bookingDateString = bookingDate;
+      if (operatingHours.startDate && bookingDateString < operatingHours.startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available until ${operatingHours.startDate}`,
+        });
+      }
+
+      if (operatingHours.endDate && bookingDateString > operatingHours.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available after ${operatingHours.endDate}`,
+        });
+      }
+
+      // Check if booking time is within daily operating hours
+      const opStartMinutes = operatingHours.startTime ? 
+        parseInt(operatingHours.startTime.split(':')[0]) * 60 + parseInt(operatingHours.startTime.split(':')[1]) : 0;
+      const opEndMinutes = operatingHours.endTime ? 
+        parseInt(operatingHours.endTime.split(':')[0]) * 60 + parseInt(operatingHours.endTime.split(':')[1]) : 1440;
+
+      if (startMinutes < opStartMinutes || endMinutes > opEndMinutes) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are only allowed between ${operatingHours.startTime || '00:00'} and ${operatingHours.endTime || '23:59'}`,
+        });
+      }
+    }
+
     // Check if the time slot exists and is available in the database
     const dayOfWeek = bookingDateObj.getDay();
     const timeSlot = await prisma.timeSlot.findFirst({

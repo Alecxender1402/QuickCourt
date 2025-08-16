@@ -46,6 +46,46 @@ export const createBookingWithTimeSlots = async (req, res) => {
       });
     }
 
+    // Check operating hours if they are set
+    if (court.operatingHours) {
+      const operatingHours = court.operatingHours;
+      const bookingDateObj = new Date(date);
+      const bookingDayOfWeek = bookingDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      
+      console.log('🕐 Enhanced Booking Operating Hours Check:', {
+        courtId: court.id,
+        date,
+        bookingDayOfWeek,
+        operatingHoursDays: operatingHours.daysOfWeek,
+        isIncluded: operatingHours.daysOfWeek ? operatingHours.daysOfWeek.includes(bookingDayOfWeek) : 'No days set'
+      });
+      
+      // Check if the venue is open on this day
+      if (!operatingHours.daysOfWeek || !operatingHours.daysOfWeek.includes(bookingDayOfWeek)) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        return res.status(400).json({
+          success: false,
+          message: `The venue is closed on ${dayNames[bookingDayOfWeek]}`,
+        });
+      }
+
+      // Check if booking date is within the operating date range
+      const bookingDateString = date;
+      if (operatingHours.startDate && bookingDateString < operatingHours.startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available until ${operatingHours.startDate}`,
+        });
+      }
+
+      if (operatingHours.endDate && bookingDateString > operatingHours.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available after ${operatingHours.endDate}`,
+        });
+      }
+    }
+
     // Verify time slots are available
     const availableSlots = await prisma.courtTimeSlot.findMany({
       where: {
@@ -82,6 +122,27 @@ export const createBookingWithTimeSlots = async (req, res) => {
     const endTimes = availableSlots.map(slot => slot.endTime).sort();
     const startTime = startTimes[0];
     const endTime = endTimes[endTimes.length - 1];
+
+    // Additional operating hours time validation
+    if (court.operatingHours) {
+      const operatingHours = court.operatingHours;
+      
+      // Convert times to minutes for comparison
+      const startMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+      const endMinutes = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+      
+      const opStartMinutes = operatingHours.startTime ? 
+        parseInt(operatingHours.startTime.split(':')[0]) * 60 + parseInt(operatingHours.startTime.split(':')[1]) : 0;
+      const opEndMinutes = operatingHours.endTime ? 
+        parseInt(operatingHours.endTime.split(':')[0]) * 60 + parseInt(operatingHours.endTime.split(':')[1]) : 1440;
+
+      if (startMinutes < opStartMinutes || endMinutes > opEndMinutes) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are only allowed between ${operatingHours.startTime || '00:00'} and ${operatingHours.endTime || '23:59'}`,
+        });
+      }
+    }
 
     // Create booking
     const booking = await prisma.booking.create({

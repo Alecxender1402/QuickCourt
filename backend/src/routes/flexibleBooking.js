@@ -88,53 +88,122 @@ router.post('/flexible-booking', authenticate, [
       });
     }
 
-    // Validate operating hours
+    // Validate operating hours using the new court operating hours system
     const dayOfWeek = bookingDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
-    const venueWorkingHours = await prisma.venueWorkingHours.findFirst({
-      where: {
-        venueId: parseInt(venueId),
-        dayOfWeek: dayOfWeek,
-        isActive: true
-      }
+    console.log('🕐 Operating Hours Check (Flexible Booking):', {
+      courtId: court.id,
+      bookingDate,
+      dayOfWeek,
+      operatingHours: court.operatingHours
     });
 
-    if (venueWorkingHours) {
-      // Convert venue working hours to minutes
-      const venueStartTime = venueWorkingHours.startTime;
-      const venueEndTime = venueWorkingHours.endTime;
+    // Check court operating hours if they are set
+    if (court.operatingHours) {
+      const operatingHours = court.operatingHours;
       
-      // Extract hours and minutes from time strings (format: HH:MM:SS)
-      const [venueStartHour, venueStartMinute] = venueStartTime.split(':').map(Number);
-      const [venueEndHour, venueEndMinute] = venueEndTime.split(':').map(Number);
-      
-      const venueStartMinutes = venueStartHour * 60 + venueStartMinute;
-      const venueEndMinutes = venueEndHour * 60 + venueEndMinute;
-
-      // Check if booking start time is before venue opens
-      if (startMinutes < venueStartMinutes) {
-        const venueOpenTime = `${venueStartHour.toString().padStart(2,'0')}:${venueStartMinute.toString().padStart(2,'0')}`;
+      // Check if the venue is open on this day
+      if (!operatingHours.daysOfWeek || !operatingHours.daysOfWeek.includes(dayOfWeek)) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         return res.status(400).json({
           success: false,
-          message: `Booking time is outside venue operating hours. The venue opens at ${venueOpenTime}.`
+          message: `The venue is closed on ${dayNames[dayOfWeek]}.`
+        });
+      }
+
+      // Check if booking date is within the operating date range
+      const bookingDateString = bookingDate;
+      if (operatingHours.startDate && bookingDateString < operatingHours.startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available until ${operatingHours.startDate}`
+        });
+      }
+
+      if (operatingHours.endDate && bookingDateString > operatingHours.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available after ${operatingHours.endDate}`
+        });
+      }
+
+      // Check if booking time is within daily operating hours
+      const opStartMinutes = operatingHours.startTime ? 
+        parseInt(operatingHours.startTime.split(':')[0]) * 60 + parseInt(operatingHours.startTime.split(':')[1]) : 0;
+      const opEndMinutes = operatingHours.endTime ? 
+        parseInt(operatingHours.endTime.split(':')[0]) * 60 + parseInt(operatingHours.endTime.split(':')[1]) : 1440;
+
+      console.log('⏰ Time validation:', {
+        startMinutes,
+        endMinutes,
+        opStartMinutes,
+        opEndMinutes,
+        startTime: operatingHours.startTime,
+        endTime: operatingHours.endTime
+      });
+
+      // Check if booking start time is before venue opens
+      if (startMinutes < opStartMinutes) {
+        return res.status(400).json({
+          success: false,
+          message: `Booking time is outside venue operating hours. The venue opens at ${operatingHours.startTime || '00:00'}.`
         });
       }
 
       // Check if booking end time is after venue closes
-      if (endMinutes > venueEndMinutes) {
-        const venueCloseTime = `${venueEndHour.toString().padStart(2,'0')}:${venueEndMinute.toString().padStart(2,'0')}`;
+      if (endMinutes > opEndMinutes) {
         return res.status(400).json({
           success: false,
-          message: `Booking time is outside venue operating hours. The venue closes at ${venueCloseTime}.`
+          message: `Booking time is outside venue operating hours. The venue closes at ${operatingHours.endTime || '23:59'}.`
         });
       }
     } else {
-      // If no working hours found for this day, venue is closed
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      return res.status(400).json({
-        success: false,
-        message: `The venue is closed on ${days[dayOfWeek]}.`
+      // If no operating hours are set, fall back to old venue working hours system
+      const venueWorkingHours = await prisma.venueWorkingHours.findFirst({
+        where: {
+          venueId: parseInt(venueId),
+          dayOfWeek: dayOfWeek,
+          isActive: true
+        }
       });
+
+      if (venueWorkingHours) {
+        // Convert venue working hours to minutes
+        const venueStartTime = venueWorkingHours.startTime;
+        const venueEndTime = venueWorkingHours.endTime;
+        
+        // Extract hours and minutes from time strings (format: HH:MM:SS)
+        const [venueStartHour, venueStartMinute] = venueStartTime.split(':').map(Number);
+        const [venueEndHour, venueEndMinute] = venueEndTime.split(':').map(Number);
+        
+        const venueStartMinutes = venueStartHour * 60 + venueStartMinute;
+        const venueEndMinutes = venueEndHour * 60 + venueEndMinute;
+
+        // Check if booking start time is before venue opens
+        if (startMinutes < venueStartMinutes) {
+          const venueOpenTime = `${venueStartHour.toString().padStart(2,'0')}:${venueStartMinute.toString().padStart(2,'0')}`;
+          return res.status(400).json({
+            success: false,
+            message: `Booking time is outside venue operating hours. The venue opens at ${venueOpenTime}.`
+          });
+        }
+
+        // Check if booking end time is after venue closes
+        if (endMinutes > venueEndMinutes) {
+          const venueCloseTime = `${venueEndHour.toString().padStart(2,'0')}:${venueEndMinute.toString().padStart(2,'0')}`;
+          return res.status(400).json({
+            success: false,
+            message: `Booking time is outside venue operating hours. The venue closes at ${venueCloseTime}.`
+          });
+        }
+      } else {
+        // If no working hours found for this day, venue is closed
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        return res.status(400).json({
+          success: false,
+          message: `The venue is closed on ${days[dayOfWeek]}.`
+        });
+      }
     }
 
     // Calculate duration and total cost
@@ -339,56 +408,130 @@ router.post('/check-availability', [
       });
     }
 
-    // Validate operating hours
+    // Validate operating hours using the new court operating hours system
     const dayOfWeek = bookingDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
-    const venueWorkingHours = await prisma.venueWorkingHours.findFirst({
-      where: {
-        venueId: parseInt(venueId),
-        dayOfWeek: dayOfWeek,
-        isActive: true
-      }
+    console.log('🕐 Operating Hours Check (Check Availability):', {
+      courtId: court.id,
+      bookingDate,
+      dayOfWeek,
+      operatingHours: court.operatingHours
     });
 
-    if (venueWorkingHours) {
-      // Convert venue working hours to minutes
-      const venueStartTime = venueWorkingHours.startTime;
-      const venueEndTime = venueWorkingHours.endTime;
+    // Check court operating hours if they are set
+    if (court.operatingHours) {
+      const operatingHours = court.operatingHours;
       
-      // Extract hours and minutes from time strings (format: HH:MM:SS)
-      const [venueStartHour, venueStartMinute] = venueStartTime.split(':').map(Number);
-      const [venueEndHour, venueEndMinute] = venueEndTime.split(':').map(Number);
-      
-      const venueStartMinutes = venueStartHour * 60 + venueStartMinute;
-      const venueEndMinutes = venueEndHour * 60 + venueEndMinute;
-
-      // Check if booking start time is before venue opens
-      if (startMinutes < venueStartMinutes) {
-        const venueOpenTime = `${venueStartHour.toString().padStart(2,'0')}:${venueStartMinute.toString().padStart(2,'0')}`;
+      // Check if the venue is open on this day
+      if (!operatingHours.daysOfWeek || !operatingHours.daysOfWeek.includes(dayOfWeek)) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         return res.status(400).json({
           success: false,
-          message: `Booking time is outside venue operating hours. The venue opens at ${venueOpenTime}.`,
+          message: `The venue is closed on ${dayNames[dayOfWeek]}.`,
+          isAvailable: false
+        });
+      }
+
+      // Check if booking date is within the operating date range
+      const bookingDateString = bookingDate;
+      if (operatingHours.startDate && bookingDateString < operatingHours.startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available until ${operatingHours.startDate}`,
+          isAvailable: false
+        });
+      }
+
+      if (operatingHours.endDate && bookingDateString > operatingHours.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: `Bookings are not available after ${operatingHours.endDate}`,
+          isAvailable: false
+        });
+      }
+
+      // Check if booking time is within daily operating hours
+      const opStartMinutes = operatingHours.startTime ? 
+        parseInt(operatingHours.startTime.split(':')[0]) * 60 + parseInt(operatingHours.startTime.split(':')[1]) : 0;
+      const opEndMinutes = operatingHours.endTime ? 
+        parseInt(operatingHours.endTime.split(':')[0]) * 60 + parseInt(operatingHours.endTime.split(':')[1]) : 1440;
+
+      console.log('⏰ Time validation (Check Availability):', {
+        startMinutes,
+        endMinutes,
+        opStartMinutes,
+        opEndMinutes,
+        startTime: operatingHours.startTime,
+        endTime: operatingHours.endTime
+      });
+
+      // Check if booking start time is before venue opens
+      if (startMinutes < opStartMinutes) {
+        return res.status(400).json({
+          success: false,
+          message: `Booking time is outside venue operating hours. The venue opens at ${operatingHours.startTime || '00:00'}.`,
           isAvailable: false
         });
       }
 
       // Check if booking end time is after venue closes
-      if (endMinutes > venueEndMinutes) {
-        const venueCloseTime = `${venueEndHour.toString().padStart(2,'0')}:${venueEndMinute.toString().padStart(2,'0')}`;
+      if (endMinutes > opEndMinutes) {
         return res.status(400).json({
           success: false,
-          message: `Booking time is outside venue operating hours. The venue closes at ${venueCloseTime}.`,
+          message: `Booking time is outside venue operating hours. The venue closes at ${operatingHours.endTime || '23:59'}.`,
           isAvailable: false
         });
       }
     } else {
-      // If no working hours found for this day, venue is closed
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      return res.status(400).json({
-        success: false,
-        message: `The venue is closed on ${days[dayOfWeek]}.`,
-        isAvailable: false
+      // If no operating hours are set, fall back to old venue working hours system
+      const venueWorkingHours = await prisma.venueWorkingHours.findFirst({
+        where: {
+          venueId: parseInt(venueId),
+          dayOfWeek: dayOfWeek,
+          isActive: true
+        }
       });
+
+      if (venueWorkingHours) {
+        // Convert venue working hours to minutes
+        const venueStartTime = venueWorkingHours.startTime;
+        const venueEndTime = venueWorkingHours.endTime;
+        
+        // Extract hours and minutes from time strings (format: HH:MM:SS)
+        const [venueStartHour, venueStartMinute] = venueStartTime.split(':').map(Number);
+        const [venueEndHour, venueEndMinute] = venueEndTime.split(':').map(Number);
+        
+        const venueStartMinutes = venueStartHour * 60 + venueStartMinute;
+        const venueEndMinutes = venueEndHour * 60 + venueEndMinute;
+
+        // Check if booking start time is before venue opens
+        if (startMinutes < venueStartMinutes) {
+          const venueOpenTime = `${venueStartHour.toString().padStart(2,'0')}:${venueStartMinute.toString().padStart(2,'0')}`;
+          return res.status(400).json({
+            success: false,
+            message: `Booking time is outside venue operating hours. The venue opens at ${venueOpenTime}.`,
+            isAvailable: false
+          });
+        }
+
+        // Check if booking end time is after venue closes
+        if (endMinutes > venueEndMinutes) {
+          const venueCloseTime = `${venueEndHour.toString().padStart(2,'0')}:${venueEndMinute.toString().padStart(2,'0')}`;
+          return res.status(400).json({
+            success: false,
+            message: `Booking time is outside venue operating hours. The venue closes at ${venueCloseTime}.`,
+            isAvailable: false
+          });
+        }
+      } else {
+        // If no working hours found for this day, venue is closed
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        return res.status(400).json({
+          success: false,
+          message: `The venue is closed on ${days[dayOfWeek]}.`,
+          isAvailable: false
+        });
+      }
     }
 
     // Check for conflicts
@@ -515,6 +658,52 @@ router.get('/court/:courtId/bookings', [
     res.status(500).json({
       success: false,
       message: 'Failed to get bookings',
+      error: error.message
+    });
+  }
+});
+
+// Get court operating hours (public endpoint for booking form)
+router.get('/court/:courtId/operating-hours', [
+  param('courtId').isInt({ min: 1 }).withMessage('Valid court ID required')
+], async (req, res) => {
+  try {
+    const { courtId } = req.params;
+
+    const court = await prisma.court.findFirst({
+      where: {
+        id: parseInt(courtId),
+        isActive: true
+      },
+      select: {
+        id: true,
+        operatingHours: true,
+        venue: {
+          select: {
+            isApproved: true
+          }
+        }
+      }
+    });
+
+    if (!court || !court.venue.isApproved) {
+      return res.status(404).json({
+        success: false,
+        message: 'Court not found or venue not approved'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: court.operatingHours || null,
+      message: 'Operating hours retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Get court operating hours error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get operating hours',
       error: error.message
     });
   }

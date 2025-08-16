@@ -828,3 +828,122 @@ export const getCourtTimeSlots = async (req, res) => {
     });
   }
 };
+
+// Set court operating hours
+export const setCourtOperatingHours = async (req, res) => {
+  try {
+    const { venueId, courtId } = req.params;
+    const { startDate, endDate, startTime, endTime, daysOfWeek } = req.body;
+
+    // Verify user owns the venue for this court
+    const court = await prisma.court.findFirst({
+      where: {
+        id: parseInt(courtId),
+        venueId: parseInt(venueId),
+      },
+      include: {
+        venue: true,
+      },
+    });
+
+    if (!court || court.venue.ownerId !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Court not found or you do not have permission to manage it',
+      });
+    }
+
+    // Validate date range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (end < start) {
+      return res.status(400).json({
+        success: false,
+        message: 'End date must be after start date',
+      });
+    }
+
+    // Validate time range
+    if (startTime >= endTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'End time must be after start time',
+      });
+    }
+
+    // Store operating hours in court record or separate table
+    // For now, we'll store it in a simple way in the court record
+    await prisma.court.update({
+      where: { id: parseInt(courtId) },
+      data: {
+        // Store operating hours as JSON in a new field
+        operatingHours: {
+          startDate,
+          endDate,
+          startTime,
+          endTime,
+          daysOfWeek,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Operating hours set successfully',
+      data: {
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        daysOfWeek,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Set court operating hours error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to set operating hours',
+      error: error.message,
+    });
+  }
+};
+
+// Get court operating hours
+export const getCourtOperatingHours = async (req, res) => {
+  try {
+    const { venueId, courtId } = req.params;
+
+    // Verify user owns the venue for this court
+    const court = await prisma.court.findFirst({
+      where: {
+        id: parseInt(courtId),
+        venueId: parseInt(venueId),
+      },
+      include: {
+        venue: true,
+      },
+    });
+
+    if (!court || court.venue.ownerId !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Court not found or you do not have permission to access it',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: court.operatingHours || null,
+      message: 'Operating hours retrieved successfully',
+    });
+  } catch (error) {
+    console.error('❌ Get court operating hours error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get operating hours',
+      error: error.message,
+    });
+  }
+};
