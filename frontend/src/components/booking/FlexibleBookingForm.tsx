@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useToast } from '../../hooks/use-toast';
+import { useToast } from "@/hooks/use-toast";
+import { formatTimeRange } from "@/utils/timeUtils";
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -462,7 +463,7 @@ const FlexibleBookingForm: React.FC<FlexibleBookingFormProps> = ({ venue }) => {
                 {existingBookings.map((booking, index) => (
                   <div key={index} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
                     <span className="font-medium">
-                      {booking.startTime} - {booking.endTime}
+                      {formatTimeRange(booking.startTime, booking.endTime)}
                     </span>
                     <span className="text-gray-600">by {booking.bookedBy}</span>
                   </div>

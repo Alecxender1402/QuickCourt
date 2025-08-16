@@ -36,6 +36,7 @@ import { useMyVenues } from "@/services/venueService";
 import { useBookings, useUpdateBookingStatus } from "@/services/bookingService";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { formatTimeRange } from "@/utils/timeUtils";
 
 const BookingOverview = () => {
   const [selectedVenue, setSelectedVenue] = useState<string>("all");
@@ -337,7 +338,7 @@ const totalRevenue =
                                 )}
                               </p>
                               <p className="text-sm text-gray-500">
-                                {booking.startTime} - {booking.endTime}
+                                {formatTimeRange(booking.startTime, booking.endTime)}
                               </p>
                             </div>
                           </div>

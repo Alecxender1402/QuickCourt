@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatTimeRange } from "@/utils/timeUtils";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useVenueOwnerReviews, useMyVenues } from "@/services/venueService";
@@ -307,7 +308,7 @@ const ReviewsManagement = () => {
                             <Calendar className="w-4 h-4" />
                             <span>
                               Booking: {new Date(review.booking.bookingDate).toLocaleDateString()} 
-                              {' '}at {review.booking.startTime} - {review.booking.endTime}
+                              {' '}at {formatTimeRange(review.booking.startTime, review.booking.endTime)}
                             </span>
                           </div>
                         </div>

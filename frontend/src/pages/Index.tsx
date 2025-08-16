@@ -46,6 +46,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import heroImage from "@/assets/hero-quickcourt.jpg";
 import { Venue, Booking } from "@/lib/types";
 import { getVenueSportImage } from "@/utils/sportImages";
+import { formatTimeOnly } from "@/utils/timeUtils";
 
 const cities = [
   "Ahmedabad",
@@ -551,7 +552,7 @@ const Index = () => {
                               {new Date(
                                 booking.bookingDate
                               ).toLocaleDateString()}{" "}
-                              at {booking.startTime}
+                              at {formatTimeOnly(booking.startTime)}
                             </p>
                           </div>
                           <Badge variant="outline" className="text-xs">

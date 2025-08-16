@@ -26,6 +26,7 @@ import {
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { formatTimeOnly } from "@/utils/timeUtils";
 
 // Dashboard data interfaces
 interface DashboardStats {
@@ -452,7 +453,7 @@ const OwnerDashboard = () => {
                       </p>
                       <p className="text-sm text-gray-500">
                         {format(new Date(booking.bookingDate), "MMM dd, yyyy")}{" "}
-                        • {booking.startTime}
+                        • {formatTimeOnly(booking.startTime)}
                       </p>
                     </div>
                   </div>

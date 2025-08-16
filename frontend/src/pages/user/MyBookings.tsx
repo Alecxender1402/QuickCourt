@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useUserBookings, useCancelBooking } from "@/services/bookingService";
 import { useState } from "react";
 import { Calendar, Clock, MapPin, AlertTriangle, Loader2 } from "lucide-react";
+import { formatTimeRange } from "@/utils/timeUtils";
 import { useToast } from "@/hooks/use-toast";
 
 const MyBookings = () => {
@@ -200,7 +201,7 @@ const MyBookings = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
                       <span>
-                        {booking.startTime} - {booking.endTime}
+                        {formatTimeRange(booking.startTime, booking.endTime)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
